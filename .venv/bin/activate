@@ -1,9 +1,6 @@
 # This file must be used with "source bin/activate" *from bash*
 # you cannot run it directly
 
-unalias python 2>/dev/null
-unalias pip 2>/dev/null
-
 deactivate () {
     # reset old environment variables
     if [ -n "${_OLD_VIRTUAL_PATH:-}" ] ; then
@@ -38,11 +35,11 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="/Users/anuradhasrinivas/nav-pronunciation-engine/.venv"
+VIRTUAL_ENV=/Users/anuradhasrinivas/map-voice/.venv
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"
-PATH="$VIRTUAL_ENV/bin:$PATH"
+PATH="$VIRTUAL_ENV/"bin":$PATH"
 export PATH
 
 # unset PYTHONHOME if set
@@ -55,9 +52,9 @@ fi
 
 if [ -z "${VIRTUAL_ENV_DISABLE_PROMPT:-}" ] ; then
     _OLD_VIRTUAL_PS1="${PS1:-}"
-    PS1="(.venv) ${PS1:-}"
+    PS1='(.venv) '"${PS1:-}"
     export PS1
-    VIRTUAL_ENV_PROMPT="(.venv) "
+    VIRTUAL_ENV_PROMPT='(.venv) '
     export VIRTUAL_ENV_PROMPT
 fi
 

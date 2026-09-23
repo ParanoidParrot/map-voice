@@ -238,6 +238,19 @@ def get_demo_html() -> HTMLResponse:
                 padding: 11px 13px;
             }
 
+            .sample.selected {
+                color: #111827;
+                background: var(--accent-light);
+                border-color: var(--accent-light);
+            }
+
+            .language-note {
+                margin: 4px 0 12px;
+                color: var(--muted);
+                font-size: 13px;
+                line-height: 1.5;
+            }
+
             .primary-action {
                 width: 100%;
                 margin-top: 4px;
@@ -256,7 +269,7 @@ def get_demo_html() -> HTMLResponse:
 
             .output-grid {
                 display: grid;
-                grid-template-columns: repeat(3, minmax(0, 1fr));
+                grid-template-columns: repeat(4, minmax(0, 1fr));
                 gap: 16px;
                 margin-top: 28px;
             }
@@ -401,7 +414,8 @@ def get_demo_html() -> HTMLResponse:
                     <p class="subtitle">
                         MapVoice normalizes navigation-style instructions, expands road abbreviations,
                         applies Indian place-name pronunciation hints, and sends the speech-friendly text
-                        to Sarvam AI Text-to-Speech for raw vs normalized audio comparison.
+                        to Sarvam AI Text-to-Speech for raw vs normalized audio comparison along with native 
+                        language speech generation.
                     </p>
 
                     <div class="hero-actions">
@@ -436,12 +450,16 @@ def get_demo_html() -> HTMLResponse:
                     <textarea id="instruction">Turn left onto NH 44 after 500m near MG Marg</textarea>
 
                     <div class="sample-grid">
-                        <button class="sample" onclick="setSample('Turn left after 500m to Hosakerehalli')">Kannada : Hosakerehalli</button>
-                        <button class="sample" onclick="setSample('Continue towards Ameerpet Veedhi')">Telugu : Ameerpet Veedhi</button>
-                        <button class="sample" onclick="setSample('Take the next right near Anna Salai')">Tamil : Anna Salai</button>
-                        <button class="sample" onclick="setSample('Head towards Shivaji Peth')">Marathi : Shivaji Peth</button>
-                        <button class="sample" onclick="setSample('Continue to Rabindra Sarani')">Bengali : Rabindra Sarani</button>
-                        <button class="sample" onclick="setSample('Turn right after 100m near Manek Chowk')">Gujarati : Manek Chowk</button>
+                        <button class="sample" data-lang="hi-IN" onclick="setSample(this, 'Turn right after 100m near Sansad Marg', 'hi-IN', 'Hindi')">Hindi : Sansad Marg</button>
+                        <button class="sample" data-lang="bn-IN" onclick="setSample(this, 'Continue to Rabindra Sarani', 'bn-IN', 'Bengali')">Bengali : Rabindra Sarani</button>
+                        <button class="sample" data-lang="kn-IN" onclick="setSample(this, 'Turn left after 500m to Hosakerehalli', 'kn-IN', 'Kannada')">Kannada : Hosakerehalli</button>
+                        <button class="sample" data-lang="mr-IN" onclick="setSample(this, 'Head towards Shivaji Peth', 'mr-IN', 'Marathi')">Marathi : Shivaji Peth</button>
+                        <button class="sample" data-lang="te-IN" onclick="setSample(this, 'Continue towards Ameerpet Veedhi', 'te-IN', 'Telugu')">Telugu : Ameerpet Veedhi</button>
+                        <button class="sample" data-lang="ta-IN" onclick="setSample(this, 'Take the next right near Anna Salai', 'ta-IN', 'Tamil')">Tamil : Anna Salai</button>
+                    </div>
+
+                    <div id="languageNote" class="language-note">
+                        Select a language sample to also generate native-language navigation audio.
                     </div>
 
                     <button id="generateButton" class="primary-action" onclick="compareAudio()">
@@ -469,6 +487,13 @@ def get_demo_html() -> HTMLResponse:
                     <code id="speechText">Waiting for pronunciation hints...</code>
                     <audio id="normalizedAudio" controls preload="none"></audio>
                 </div>
+
+                <div class="output-card">
+                    <h3 id="nativeHeading">Native Language</h3>
+                    <code id="translatedText">Select a language to generate native-language speech...</code>
+                    <audio id="nativeAudio" controls preload="none"></audio>
+                    <div id="nativeError" style="display:none; color:#FB7185; margin-top:10px;"></div>
+                </div>
             </section>
 
             <div class="provider-note">
@@ -482,24 +507,55 @@ def get_demo_html() -> HTMLResponse:
         </main>
 
         <script>
-            function setSample(text) {
+            let selectedLanguageCode = null;
+            let selectedLanguageName = null;
+
+            function setSample(button, text, languageCode, languageName) {
                 document.getElementById("instruction").value = text;
-                clearOutputs();
+                selectedLanguageCode = languageCode;
+                selectedLanguageName = languageName;
+
+                document.querySelectorAll(".sample").forEach((sample) => {
+                    sample.classList.remove("selected");
+                });
+                button.classList.add("selected");
+
+                document.getElementById("languageNote").textContent =
+                    languageName + " selected — native-language audio will be generated.";
+                document.getElementById("nativeHeading").textContent =
+                    languageName + " Audio";
+
+                clearOutputs(false);
             }
 
-            function clearOutputs() {
+            function clearOutputs(resetLanguage = true) {
                 document.getElementById("originalText").textContent = "Waiting for input...";
                 document.getElementById("normalizedText").textContent = "Waiting for output...";
                 document.getElementById("speechText").textContent = "Waiting for pronunciation hints...";
+                document.getElementById("translatedText").textContent = selectedLanguageCode
+                    ? "Waiting for " + selectedLanguageName + " translation..."
+                    : "Select a language to generate native-language speech...";
                 document.getElementById("status").textContent = "";
 
                 const rawAudio = document.getElementById("rawAudio");
                 const normalizedAudio = document.getElementById("normalizedAudio");
+                const nativeAudio = document.getElementById("nativeAudio");
 
-                rawAudio.removeAttribute("src");
-                normalizedAudio.removeAttribute("src");
-                rawAudio.load();
-                normalizedAudio.load();
+                [rawAudio, normalizedAudio, nativeAudio].forEach((audio) => {
+                    audio.removeAttribute("src");
+                    audio.load();
+                });
+
+                if (resetLanguage) {
+                    selectedLanguageCode = null;
+                    selectedLanguageName = null;
+                    document.querySelectorAll(".sample").forEach((sample) => {
+                        sample.classList.remove("selected");
+                    });
+                    document.getElementById("languageNote").textContent =
+                        "Select a language sample to also generate native-language navigation audio.";
+                    document.getElementById("nativeHeading").textContent = "Native Language";
+                }
             }
 
             function typeText(element, text, delay = 14) {
@@ -526,29 +582,42 @@ def get_demo_html() -> HTMLResponse:
                 const originalText = document.getElementById("originalText");
                 const normalizedText = document.getElementById("normalizedText");
                 const speechText = document.getElementById("speechText");
+                const translatedText = document.getElementById("translatedText");
                 const rawAudio = document.getElementById("rawAudio");
                 const normalizedAudio = document.getElementById("normalizedAudio");
+                const nativeAudio = document.getElementById("nativeAudio");
+                const nativeError = document.getElementById("nativeError");
 
                 generateButton.disabled = true;
                 status.classList.remove("error");
-                status.textContent = "Generating speech comparison...";
+                status.textContent = selectedLanguageCode
+                    ? "Generating English comparison + " + selectedLanguageName + " audio..."
+                    : "Generating speech comparison...";
 
                 originalText.textContent = "Loading...";
                 normalizedText.textContent = "Loading...";
                 speechText.textContent = "Loading...";
+                translatedText.textContent = selectedLanguageCode
+                    ? "Translating to " + selectedLanguageName + "..."
+                    : "Select a language to generate native-language speech...";
 
-                rawAudio.removeAttribute("src");
-                normalizedAudio.removeAttribute("src");
-                rawAudio.load();
-                normalizedAudio.load();
+                [rawAudio, normalizedAudio, nativeAudio].forEach((audio) => {
+                    audio.removeAttribute("src");
+                    audio.load();
+                });
 
                 try {
+                    const requestBody = { instruction };
+                    if (selectedLanguageCode) {
+                        requestBody.target_language_code = selectedLanguageCode;
+                    }
+
                     const response = await fetch("/demo/compare", {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json"
                         },
-                        body: JSON.stringify({ instruction })
+                        body: JSON.stringify(requestBody)
                     });
 
                     if (!response.ok) {
@@ -564,11 +633,55 @@ def get_demo_html() -> HTMLResponse:
 
                     rawAudio.src = data.raw_audio_url;
                     normalizedAudio.src = data.normalized_audio_url;
-
                     rawAudio.load();
                     normalizedAudio.load();
 
-                    status.textContent = "Ready. Play raw audio, then normalized audio.";
+                    if (data.translated_text && data.native_audio_url) {
+
+                        typeText(translatedText, data.translated_text);
+
+                        nativeAudio.src = data.native_audio_url;
+                        nativeAudio.load();
+                        nativeAudio.style.display = "block";
+
+                        document.getElementById("nativeHeading").textContent =
+                            (data.target_language_name || selectedLanguageName || "Native")
+                            + " Audio";
+
+                        status.textContent =
+                            "Ready. Compare raw, normalized, and native-language audio.";
+
+                    } else {
+
+                        // Clear any native audio from the previous request.
+                        nativeAudio.pause();
+                        nativeAudio.removeAttribute("src");
+                        nativeAudio.load();
+                        nativeAudio.style.display = "none";
+
+                        // If translation succeeded but TTS failed, still show the translation.
+                        if (data.translated_text) {
+                            typeText(translatedText, data.translated_text);
+                        } else {
+                            translatedText.textContent =
+                                "Select a language sample to generate native-language speech.";
+                        }
+
+                        status.textContent =
+                            "Ready. Raw and normalized English audio are available.";
+                    }
+
+
+                    if (data.native_audio_error) {
+
+                        nativeError.textContent = data.native_audio_error;
+                        nativeError.style.display = "block";
+
+                    } else {
+
+                        nativeError.textContent = "";
+                        nativeError.style.display = "none";
+                    }
                 } catch (err) {
                     status.classList.add("error");
                     status.textContent = "Error: " + err.message;
@@ -576,6 +689,7 @@ def get_demo_html() -> HTMLResponse:
                     originalText.textContent = "Error";
                     normalizedText.textContent = "Error";
                     speechText.textContent = "Error";
+                    translatedText.textContent = "Error";
                 } finally {
                     generateButton.disabled = false;
                 }

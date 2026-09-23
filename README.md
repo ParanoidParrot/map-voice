@@ -9,6 +9,8 @@ This project demonstrates how mixed-language street names (e.g., English + India
 - word splitting
 - speech synthesis using Sarvam AI
 
+It also translates normalized English navigation instructions into selected Indian languages and generates native-language speech using Sarvam Translate + Bulbul TTS.
+
 
 ## Problem
 
@@ -91,20 +93,46 @@ Try it out: [TryItHere](https://nav-pronunciation-engine-production.up.railway.a
 
 ```mermaid
 flowchart TD 
-    A[Raw Navigation Instruction] --> B[Tokenizer] 
+    %% Runtime pipeline
+    A[Raw Navigation Instruction] --> B[Tokenizer]
     B --> C[Rule-based Normalizer]
-     C --> D[Number & Distance Expansion] 
-     D --> E[Abbreviation Expansion] 
-     E --> F[Suffix Detector] 
-     F --> G[Word Splitter] 
-     G --> H[Phonetic-friendly Text] 
-     H --> I[Sarvam TTS Engine] 
-     I --> J[Audio Output] 
-     
-     %% Data pipeline 
-     K[OpenStreetMap India Dataset] --> L[Named Road Extraction] 
-     L --> M[Suffix Mining]
-     M --> N[Suffix Cleaning & Clustering] 
-     N --> O[Lexicon Builder] 
-     O --> P[lexicon.json] 
-     P --> F
+    C --> D[Number & Distance Expansion]
+    D --> E[Abbreviation & Acronym Expansion]
+    E --> F[Suffix Detector]
+    F --> G[Word Splitter]
+    G --> H[Normalized Navigation Text]
+
+    %% English pronunciation path
+    H --> I[Pronunciation Hint Layer]
+    I --> J[Speech-friendly English Text]
+    A --> K[Raw English TTS]
+    J --> L[Normalized English TTS]
+
+    %% Native-language path
+    H --> M{Native Language Selected?}
+    M -- Yes --> N[Sarvam Translate API]
+    N --> O[Native-script Navigation Text]
+    O --> P[Sarvam TTS<br/>Selected Language Code]
+    M -- No --> Q[Skip Native Translation]
+
+    %% Audio outputs
+    K --> R[Raw English Audio]
+    L --> S[Normalized English Audio]
+    P --> T[Native-language Audio]
+
+    R --> U[Web Demo / API Response]
+    S --> U
+    T --> U
+    Q --> U
+
+    %% Data pipeline
+    V[OpenStreetMap India Dataset Offline Source Data] --> W[Named Road Extraction]
+    W --> X[Suffix Mining]
+    X --> Y[Suffix Cleaning & Clustering]
+    Y --> Z[Lexicon Builder]
+    Z --> AA[lexicon.json]
+
+    %% Lexicon feeds runtime suffix processing
+    AA --> F
+
+MapVoice uses an OpenStreetMap-derived Indian road-name lexicon to support suffix detection and word splitting during normalization. At runtime, normalized navigation text can follow either the pronunciation-aware English TTS path or, when a native language is selected, a translation path that generates native-script text and speech using Sarvam Translate and TTS. OpenStreetMap India data is used offline to derive road-name suffix patterns and build lexicon.json. The deployed runtime depends on the generated lexicon, not on the raw OSM/PBF/GeoJSON files.

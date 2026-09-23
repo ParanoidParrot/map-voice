@@ -11,6 +11,10 @@ from backend_api.cleanup import cleanup_audio_files
 from backend_api.schemas import DemoCompareResponse, Instruction
 from pronunciation_engine.normalizer import normalize_instruction
 from pronunciation_engine.pronunciation_hints import apply_pronunciation_hints
+from pronunciation_engine.translation_engine import (
+    SUPPORTED_NATIVE_LANGUAGES,
+    translate_navigation_text,
+)
 from pronunciation_engine.tts_engine import text_to_speech_file
 
 router = APIRouter()
@@ -31,10 +35,7 @@ def _hash_text(text: str) -> str:
 
 
 def _safe_audio_path(filename: str) -> Path:
-    """
-    Prevent path traversal by allowing only direct filenames
-    inside GENERATED_AUDIO_DIR.
-    """
+    """Prevent path traversal by allowing only direct filenames in the audio dir."""
     requested = (GENERATED_AUDIO_DIR / filename).resolve()
     base_dir = GENERATED_AUDIO_DIR.resolve()
 
@@ -108,6 +109,15 @@ def compare_audio(data: Instruction):
                 detail="Instruction cannot be empty",
             )
 
+        if (
+            data.target_language_code
+            and data.target_language_code not in SUPPORTED_NATIVE_LANGUAGES
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported target language: {data.target_language_code}",
+            )
+
         normalized_text = normalize_instruction(original_text)
         speech_text = apply_pronunciation_hints(normalized_text)
 
@@ -118,12 +128,15 @@ def compare_audio(data: Instruction):
         normalized_hash = _hash_text("normalized::" + speech_text)
 
         raw_file = GENERATED_AUDIO_DIR / f"raw_{raw_slug}_{raw_hash}.wav"
-        normalized_file = GENERATED_AUDIO_DIR / f"normalized_{normalized_slug}_{normalized_hash}.wav"
+        normalized_file = (
+            GENERATED_AUDIO_DIR
+            / f"normalized_{normalized_slug}_{normalized_hash}.wav"
+        )
 
         text_to_speech_file(
             text=original_text,
             filename=str(raw_file),
-            target_language_code="en-IN",
+            language_code="en-IN",
             speaker=None,
             use_cache=True,
         )
@@ -131,10 +144,81 @@ def compare_audio(data: Instruction):
         text_to_speech_file(
             text=speech_text,
             filename=str(normalized_file),
-            target_language_code="en-IN",
+            language_code="en-IN",
             speaker=None,
             use_cache=True,
         )
+
+        translated_text = None
+        native_audio_url = None
+        native_audio_error = None
+        target_language_name = None
+
+        if data.target_language_code:
+            target_language_name = SUPPORTED_NATIVE_LANGUAGES.get(
+                data.target_language_code
+            )
+
+            if not target_language_name:
+                native_audio_error = (
+                    f"Unsupported native language: "
+                    f"{data.target_language_code}"
+                )
+
+            else:
+                try:
+                    # Translate the normalized instruction rather than the
+                    # raw text so numbers, distances and abbreviations have
+                    # already been expanded.
+                    translated_text = translate_navigation_text(
+                        normalized_text,
+                        data.target_language_code,
+                    )
+
+                    native_slug = _slugify(
+                        f"{target_language_name}_{original_text}",
+                        max_len=50,
+                    )
+
+                    native_hash = _hash_text(
+                        f"native::{data.target_language_code}::{translated_text}"
+                    )
+
+                    native_file = (
+                        GENERATED_AUDIO_DIR
+                        / (
+                            f"native_{data.target_language_code}_"
+                            f"{native_slug}_{native_hash}.wav"
+                        )
+                    )
+
+                    # The pronunciation dictionary is currently intended
+                    # for the English pronunciation path. Native-script
+                    # TTS uses the selected language directly.
+                    text_to_speech_file(
+                        text=translated_text,
+                        filename=str(native_file),
+                        language_code=data.target_language_code,
+                        speaker=None,
+                        use_cache=True,
+                        use_pronunciation_dictionary=False,
+                    )
+
+                    native_audio_url = f"/audio/{native_file.name}"
+
+                except Exception as native_exc:
+                    print(
+                        "Native-language generation failed:",
+                        {
+                            "language": data.target_language_code,
+                            "error": str(native_exc),
+                        },
+                    )
+
+                    native_audio_error = (
+                        f"{target_language_name} audio "
+                        "could not be generated."
+                    )
 
         return DemoCompareResponse(
             original_text=original_text,
@@ -142,6 +226,11 @@ def compare_audio(data: Instruction):
             speech_text=speech_text,
             raw_audio_url=f"/audio/{raw_file.name}",
             normalized_audio_url=f"/audio/{normalized_file.name}",
+            target_language_code=data.target_language_code,
+            target_language_name=target_language_name,
+            translated_text=translated_text,
+            native_audio_url=native_audio_url,
+            native_audio_error=native_audio_error,
         )
 
     except HTTPException:
